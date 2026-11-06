@@ -30,7 +30,7 @@ export default function WeatherSolunarTab() {
   }, [selectedLoc]);
 
   const dateObj = new Date(selectedDate);
-  const solunar = calculateSolunarDay(dateObj, weather.windSpeed, weather.waveHeight);
+  const solunar = calculateSolunarDay(dateObj, weather, selectedLoc);
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
@@ -46,7 +46,10 @@ export default function WeatherSolunarTab() {
                 value={selectedLoc.id}
                 onChange={(e) => {
                   const loc = PRESET_LOCATIONS.find(l => l.id === e.target.value);
-                  if (loc) setSelectedLoc(loc);
+                  if (loc) {
+                    setSelectedLoc(loc);
+                    setWeather(getOfflineWeatherData(loc));
+                  }
                 }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 font-medium"
               >
@@ -132,12 +135,14 @@ export default function WeatherSolunarTab() {
               </div>
 
               <div>
-                <h3 className="text-xl font-bold text-slate-100">تقييم اليوم</h3>
+                <h3 className="text-xl font-bold text-slate-100">
+                  تقييم اليوم في {selectedLoc.name.split(' ')[0]}
+                </h3>
                 <span className={`inline-block mt-1 px-3 py-1 rounded-xl text-xs font-bold border ${solunar.ratingColor}`}>
                   {solunar.ratingText}
                 </span>
                 <p className="text-xs text-slate-300 mt-1.5 leading-relaxed max-w-xs">
-                  محسوب بالمعادلات الفلكية لحركة الشمس والقمر وشدة الجاذبية المؤثرة على دورة تغذية الأسماك.
+                  محسوب ديناميكياً وفق طقس {selectedLoc.name.split(' ')[0]} والضغط الجوي وسرعة الرياح والأمواج وجاذبية القمر.
                 </p>
               </div>
             </div>
@@ -177,12 +182,122 @@ export default function WeatherSolunarTab() {
             <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 text-xs text-cyan-400 mb-1">
                 <Waves className="w-4 h-4" />
-                <span>حالة الأمواج</span>
+                <span>حالة المياه</span>
               </div>
               <div className="text-sm font-bold text-slate-200">{weather.waveHeight} متر</div>
-              <div className="text-xs text-slate-400">{weather.wavePeriod > 0 ? `${weather.wavePeriod} ثانية` : 'مياه راكدة'}</div>
+              <div className="text-xs text-slate-400">{weather.wavePeriod > 0 ? `${weather.wavePeriod} ثانية` : 'مياه راكدة/نهرية'}</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Location Environmental Analysis & Active Fish Card */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Gauge className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-base font-bold text-slate-100">
+              🔬 أسباب نسبة نشاط الأسماك ({solunar.overallScore}%) في {selectedLoc.name.split(' ')[0]}:
+            </h3>
+          </div>
+          <span className="text-xs px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold self-start sm:self-auto">
+            مؤشر حي متكيف مع ظروف الموقع
+          </span>
+        </div>
+
+        {/* 4 Environmental factors cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Pressure */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                <Gauge className="w-4 h-4 text-indigo-400" />
+                الضغط ({weather.pressure} hPa)
+              </span>
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${solunar.factors.pressure.mod >= 0 ? 'text-emerald-400 bg-emerald-950/60' : 'text-rose-400 bg-rose-950/60'}`}>
+                {solunar.factors.pressure.mod >= 0 ? `+${solunar.factors.pressure.mod}%` : `${solunar.factors.pressure.mod}%`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {solunar.factors.pressure.desc}
+            </p>
+          </div>
+
+          {/* Wind */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                <Wind className="w-4 h-4 text-sky-400" />
+                الرياح ({weather.windSpeed} كم/س)
+              </span>
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${solunar.factors.wind.mod >= 0 ? 'text-emerald-400 bg-emerald-950/60' : 'text-rose-400 bg-rose-950/60'}`}>
+                {solunar.factors.wind.mod >= 0 ? `+${solunar.factors.wind.mod}%` : `${solunar.factors.wind.mod}%`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {solunar.factors.wind.desc}
+            </p>
+          </div>
+
+          {/* Waves */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                <Waves className="w-4 h-4 text-teal-400" />
+                المياه ({weather.waveHeight}م)
+              </span>
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${solunar.factors.wave.mod >= 0 ? 'text-emerald-400 bg-emerald-950/60' : 'text-rose-400 bg-rose-950/60'}`}>
+                {solunar.factors.wave.mod >= 0 ? `+${solunar.factors.wave.mod}%` : `${solunar.factors.wave.mod}%`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {solunar.factors.wave.desc}
+            </p>
+          </div>
+
+          {/* Temperature */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
+                <Sun className="w-4 h-4 text-amber-400" />
+                الحرارة ({weather.temperature}°م)
+              </span>
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${solunar.factors.temperature.mod >= 0 ? 'text-emerald-400 bg-emerald-950/60' : 'text-rose-400 bg-rose-950/60'}`}>
+                {solunar.factors.temperature.mod >= 0 ? `+${solunar.factors.temperature.mod}%` : `${solunar.factors.temperature.mod}%`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {solunar.factors.temperature.desc}
+            </p>
+          </div>
+        </div>
+
+        {/* Active Species in this location */}
+        <div className="p-4 rounded-2xl bg-slate-950/90 border border-cyan-500/20 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <Fish className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-bold text-cyan-300">
+              الأسماك الأكثر نشاطاً وضاربة اليوم في {selectedLoc.name.split(' ')[0]}:
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {solunar.activeSpecies.map((fishName, idx) => (
+              <span 
+                key={idx}
+                className="px-3 py-1 rounded-xl bg-cyan-950/70 text-cyan-200 border border-cyan-500/30 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                {fishName}
+              </span>
+            ))}
+          </div>
+
+          {solunar.locationNote && (
+            <p className="text-xs text-slate-300 pt-1 leading-relaxed border-t border-slate-800/60">
+              📌 <strong>طبيعة مياه الموقع:</strong> {solunar.locationNote}
+            </p>
+          )}
         </div>
       </div>
 
@@ -261,12 +376,12 @@ export default function WeatherSolunarTab() {
 
       {/* Solunar Feeding Peak Periods */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-        <h3 className="text-base font-bold text-slate-100 mb-2 flex items-center gap-2">
+        <h3 className="text-base font-bold text-slate-100 mb-1 flex items-center gap-2">
           <Fish className="w-5 h-5 text-amber-400" />
-          فترات الذروة والتغذية الدقيقة للأسماك اليوم (ساعات الضربة):
+          فترات الذروة والتغذية الدقيقة للأسماك في {selectedLoc.name.split(' ')[0]} (ساعات الضربة):
         </h3>
         <p className="text-xs text-slate-400 mb-4">
-          تعتبر هذه الساعات هي الأثمن خلال رحلتك؛ احرص على أن تكون طعومك في الماء وجاهزة خلالها.
+          محسوبة فلكياً ومعدلة جغرافياً لخط طول {selectedLoc.name.split(' ')[0]}؛ احرص على أن تكون طعومك في الماء وجاهزة خلالها.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

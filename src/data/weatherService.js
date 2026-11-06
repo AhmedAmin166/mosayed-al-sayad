@@ -62,7 +62,7 @@ export async function fetchLiveWeatherData(location) {
       seaState: getSeaStateDescription(waveHeight, windSpeed, location.type),
       sunrise: daily.sunrise?.[0] ? daily.sunrise[0].split('T')[1].substring(0, 5) : '06:12',
       sunset: daily.sunset?.[0] ? daily.sunset[0].split('T')[1].substring(0, 5) : '17:28',
-      tides: generateTideTimes(new Date())
+      tides: generateTideTimes(new Date(), location)
     };
   } catch (err) {
     // Offline / Fallback realistic simulator
@@ -95,7 +95,21 @@ function getSeaStateDescription(wave, wind, type) {
   return 'بحر هائج وعالي الموج (ممنوع ركوب البحر) 🚫';
 }
 
-function generateTideTimes(date) {
+function generateTideTimes(date, location = {}) {
+  const locId = location?.id || '';
+  const isNile = location?.type === 'nile';
+  const isRedSea = locId === 'suez' || locId === 'hurghada' || locId === 'sharm';
+  const isCanal = locId === 'ismailia' || locId === 'fayed';
+
+  if (isNile) {
+    return [
+      { type: 'تيار صباحي هادئ', time: '06:30 ص', level: 'منسوب مستقر' },
+      { type: 'نشاط تيار النيل', time: '12:00 م', level: 'جريان نشط' },
+      { type: 'تيار ما قبل الغروب', time: '05:30 م', level: 'مثالي للغماز' },
+      { type: 'سكون الليل والهدوء', time: '10:30 م', level: 'مثالي للحداف' }
+    ];
+  }
+
   const day = date.getDate();
   const highHour1 = (day * 0.8 + 3) % 12;
   const lowHour1 = (highHour1 + 6.2) % 12;
@@ -106,30 +120,61 @@ function generateTideTimes(date) {
     return `${hours}:${mins < 10 ? '0' : ''}${mins} ${isPM ? 'م' : 'ص'}`;
   };
 
+  const highLevel = isRedSea ? '+1.65 متر' : isCanal ? '+0.85 متر' : '+0.45 متر';
+  const lowLevel = isRedSea ? '-0.55 متر' : isCanal ? '-0.30 متر' : '-0.15 متر';
+
   return [
-    { type: 'مد صاعد (High Tide)', time: fmt(highHour1, false), level: '+0.45 متر' },
-    { type: 'جزر هابط (Low Tide)', time: fmt(lowHour1, false), level: '-0.20 متر' },
-    { type: 'مد صاعد (High Tide)', time: fmt(highHour1, true), level: '+0.50 متر' },
-    { type: 'جزر هابط (Low Tide)', time: fmt(lowHour1, true), level: '-0.15 متر' }
+    { type: 'مد صاعد (High Tide)', time: fmt(highHour1, false), level: highLevel },
+    { type: 'جزر هابط (Low Tide)', time: fmt(lowHour1, false), level: lowLevel },
+    { type: 'مد صاعد (High Tide)', time: fmt(highHour1, true), level: highLevel },
+    { type: 'جزر هابط (Low Tide)', time: fmt(lowHour1, true), level: lowLevel }
   ];
 }
 
 export function getOfflineWeatherData(location) {
-  const isMarine = location.type !== 'nile';
-  return {
-    isLive: false,
-    temperature: isMarine ? 23 : 26,
+  const locId = location?.id || 'ismailia';
+  const locType = location?.type || 'marine';
+  const isMarine = locType !== 'nile';
+
+  const defaultProfiles = {
+    ismailia: { temp: 24, feelsLike: 23, humidity: 62, pressure: 1015, wind: 13, dir: 'شمالية غربية (شمالي)', wave: 0.5, period: 4.2 },
+    fayed: { temp: 24, feelsLike: 24, humidity: 60, pressure: 1015, wind: 12, dir: 'شمالية غربية', wave: 0.4, period: 3.8 },
+    alex: { temp: 21, feelsLike: 20, humidity: 70, pressure: 1017, wind: 19, dir: 'شمالية غربية (بحري)', wave: 1.2, period: 6.0 },
+    portsaid: { temp: 22, feelsLike: 21, humidity: 68, pressure: 1016, wind: 17, dir: 'شمالية (بحري)', wave: 1.1, period: 5.5 },
+    suez: { temp: 25, feelsLike: 25, humidity: 55, pressure: 1014, wind: 21, dir: 'شمالية (شمالي)', wave: 0.8, period: 4.8 },
+    hurghada: { temp: 28, feelsLike: 27, humidity: 45, pressure: 1012, wind: 22, dir: 'شمالية غربية', wave: 0.9, period: 5.0 },
+    sharm: { temp: 27, feelsLike: 26, humidity: 48, pressure: 1013, wind: 18, dir: 'شمالية شرقية', wave: 0.7, period: 4.5 },
+    damietta: { temp: 22, feelsLike: 21, humidity: 66, pressure: 1016, wind: 16, dir: 'شمالية', wave: 1.0, period: 5.2 },
+    matrouh: { temp: 20, feelsLike: 19, humidity: 65, pressure: 1018, wind: 20, dir: 'شمالية غربية', wave: 1.3, period: 6.2 },
+    cairo: { temp: 26, feelsLike: 26, humidity: 50, pressure: 1015, wind: 11, dir: 'شمالية شرقية', wave: 0.1, period: 0 },
+    aswan: { temp: 31, feelsLike: 30, humidity: 30, pressure: 1011, wind: 14, dir: 'شمالية', wave: 0.1, period: 0 }
+  };
+
+  const p = defaultProfiles[locId] || {
+    temp: isMarine ? 23 : 26,
     feelsLike: isMarine ? 22 : 25,
     humidity: isMarine ? 65 : 50,
-    pressure: 1016,
-    windSpeed: 14,
-    windDirection: 'شمالية غربية (شمالي)',
+    pressure: 1015,
+    wind: 14,
+    dir: 'شمالية غربية',
+    wave: isMarine ? 0.9 : 0.1,
+    period: isMarine ? 5.0 : 0
+  };
+
+  return {
+    isLive: false,
+    temperature: p.temp,
+    feelsLike: p.feelsLike,
+    humidity: p.humidity,
+    pressure: p.pressure,
+    windSpeed: p.wind,
+    windDirection: p.dir,
     windDirDeg: 315,
-    waveHeight: isMarine ? 0.9 : 0.1,
-    wavePeriod: isMarine ? 5.0 : 0,
-    seaState: isMarine ? 'خفيف إلى معتدل الموج (مثالي للصيد) 🌊' : 'مياه نيلية هادئة 🟢',
-    sunrise: '06:15',
-    sunset: '17:30',
-    tides: generateTideTimes(new Date())
+    waveHeight: p.wave,
+    wavePeriod: p.period,
+    seaState: getSeaStateDescription(p.wave, p.wind, locType),
+    sunrise: '06:14',
+    sunset: '17:29',
+    tides: generateTideTimes(new Date(), location)
   };
 }
